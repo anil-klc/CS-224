@@ -1,0 +1,434 @@
+.data
+
+	line1 : .asciiz "\n Provide N : "
+	line2 : .asciiz "\n Provide an element : "
+	line3 : .asciiz "\n DONE"
+	line4 : .asciiz "\n given matrix is : \n"
+	line5 : .asciiz "\n row-major sum is : "
+	line6 : .asciiz "\n column-major sum is : "
+	line7 : .asciiz "\n desired element is : "
+	line8 : .asciiz "\n provide i : "
+	line9 : .asciiz "\n provide j : "
+	line10 : .asciiz "\n Dou you want to repeat desired element choose? (1 for YES, 0 for NO) : "
+	newLine : .asciiz "\n"
+	space : .asciiz " "
+
+
+.text
+	
+main:
+
+	jal sizeFromUser
+	
+	addi $a0, $v0, 0
+	jal createMatrix 
+	
+	addi $a1, $v0, 0 # a0 still contains N
+	jal fillMatrix  
+	
+	jal printMatrix
+	
+	jal askDesiredElement
+	
+	jal columnSum
+	
+	jal rowSum
+	
+	jal done
+
+
+askDesiredElement:
+	
+		addi $sp, $sp, -12
+		sw $ra, 0($sp)
+		sw $a0, 4($sp)
+		sw $a1, 8($sp)
+		
+		addi $s0, $a0, 0
+		addi $s1, $a1, 0
+	
+		la $a0, line8
+		li $v0, 4
+		syscall
+		
+		li $v0,5
+		syscall
+	
+		addi $s2, $v0, 0 
+		
+		la $a0, line9
+		li $v0, 4
+		syscall
+		
+		li $v0,5
+		syscall
+		
+		addi $s3, $v0, 0
+		
+		addi $a0, $s0, 0 # a0 -> N
+		addi $a1, $s1, 0 # a1 -> base address of array
+		addi $a2, $s2, 0 # a2 -> i
+		addi $a3, $s3, 0 # a3 -> j
+		jal desiredElement
+		
+		la $a0, line10
+		li $v0, 4
+		syscall
+		
+		li $v0,5
+		syscall
+		
+		lw $a1, 8($sp)
+		lw $a0, 4($sp)
+		lw $ra, 0($sp)
+		addi $sp, $sp, 12
+		
+		beq $v0, 1, askDesiredElement
+		
+		jr $ra 
+		
+		
+		
+		
+# a0 -> N
+# a1 -> base address of array
+# a2 -> i
+# a3 -> j
+desiredElement:
+
+	addi $sp, $sp, -12
+	sw $ra, 0($sp)
+	sw $a0, 4($sp)
+	sw $a1, 8($sp)
+	
+	addi $s0, $a0, 0
+	addi $s1, $a1, 0
+	addi $s2, $a2, 0 # $s2 - > i
+	addi $s3, $a3, 0 # $s3 - > j
+	
+	
+	la $a0, line7
+	li $v0, 4
+	syscall
+	
+	addi $s2, $s2, -1
+	addi $s3, $s3, -1
+	
+	mul $s3, $s3, $s0
+	mul $s3, $s3, 4
+	
+	mul $s2, $s2, 4
+	
+	add $s4, $s2, $s3
+	add $s1, $s1, $s4 
+	
+	lw $s4, 0($s1)
+	
+	addi $a0, $s4, 0
+	li $v0, 1
+	syscall
+	
+	lw $a1, 8($sp)
+	lw $a0, 4($sp)
+	lw $ra, 0($sp)
+	addi $sp, $sp, 12
+		
+	jr $ra 
+	
+	
+	
+	
+	
+# a0 -> N
+# a1 -> base address of array
+columnSum:
+
+	addi $sp, $sp, -12
+	sw $ra, 0($sp)
+	sw $a0, 4($sp)
+	sw $a1, 8($sp)
+	
+	addi $s0, $a0, 0
+	addi $s1, $a1, 0
+	
+	addi $s2, $zero, 0 # $s2 -> traverse the rows
+	addi $s3, $zero, 0 # $s3 -> traverse the columns 
+	addi $v1, $zero, 0 # result
+	
+	la $a0, line6
+	li $v0, 4
+	syscall
+
+	traverseRows:
+		
+		slt $s4, $s2, $s0
+		beq $s4, 0, doneTraverseRows
+		
+		addi $s6, $s1, 0
+		
+		traverseColumn:
+			
+			slt $s5, $s3, $s0
+			beq $s5, 0, doneTraverseColumn
+			
+			lw $s7, 0($s6)
+			
+			add $v1, $v1, $s7
+
+			addi $s3, $s3, 1
+			
+			mul $s7, $s0, 4
+
+			add $s6, $s6, $s7
+			
+			j traverseColumn
+		
+		doneTraverseColumn:
+		
+			addi $s2, $s2, 1
+			addi $s1, $s1, 4
+			addi $s3, $zero, 0
+			
+			j traverseRows
+	
+	doneTraverseRows:
+	
+		addi $a0, $v1, 0
+		li $v0, 1
+		syscall
+		
+		lw $a1, 8($sp)
+		lw $a0, 4($sp)
+		lw $ra, 0($sp)
+		addi $sp, $sp, 12
+		
+		jr $ra 
+	
+# a0 -> N
+# a1 -> base address of array
+rowSum:
+
+	addi $sp, $sp, -12
+	sw $ra, 0($sp)
+	sw $a0, 4($sp)
+	sw $a1, 8($sp)
+	
+	addi $s0, $a0, 0
+	addi $s1, $a1, 0
+	
+	addi $s2, $zero, 0 # $s2 -> checks row sum
+	addi $s3, $zero, 0 # $s3 -> checks column sum
+	addi $s7, $zero, 0
+	
+	la $a0, line5
+	li $v0, 4
+	syscall
+
+	
+	sumElementRow:
+		
+		slt $s4, $s2, $s0
+		beq $s4, 0, doneRowSum
+		
+		
+		lw $s6, 0($s1)
+		
+		add $s7, $s7, $s6
+		
+		
+		addi $s2, $s2, 1
+		addi $s1, $s1, 4 # next element
+		
+		j sumElementRow
+		
+		
+	
+	doneRowSum:
+		
+		addi $s3, $s3, 1
+		addi $s2, $zero, 0
+		
+		slt $s5, $s3, $s0
+		beq $s5, 0, doneRowMajorSum
+		
+		j sumElementRow
+		
+	
+	doneRowMajorSum:
+		
+		addi $a0, $s7, 0
+		li $v0, 1
+		syscall
+		
+		lw $a1, 8($sp)
+		lw $a0, 4($sp)
+		lw $ra, 0($sp)
+		addi $sp, $sp, 12
+		
+		jr $ra 
+
+
+
+
+# a0 -> N
+# a1 -> base address of array
+printMatrix:
+
+	addi $sp, $sp, -12
+	sw $ra, 0($sp)
+	sw $a0, 4($sp)
+	sw $a1, 8($sp)
+	
+	addi $s0, $a0, 0
+	addi $s1, $a1, 0
+	
+	addi $s2, $zero, 0 # $s2 -> checks row print 
+	addi $s3, $zero, 0 # $s3 -> checks column print
+	
+	la $a0, line4
+	li $v0, 4
+	syscall
+
+
+	la $a0, newLine
+	li $v0, 4
+	syscall
+	
+	printElement:
+		
+		slt $s4, $s2, $s0
+		beq $s4, 0, doneRow
+		
+		la $a0, space
+		li $v0, 4
+		syscall
+		
+		lw $a0, 0($s1)
+		li $v0, 1
+		syscall
+		
+		la $a0, space
+		li $v0, 4
+		syscall
+		
+		addi $s2, $s2, 1
+		addi $s1, $s1, 4 # next element
+		
+		j printElement
+		
+		
+	
+	doneRow:
+		
+		la $a0, newLine
+		li $v0, 4
+		syscall
+		
+		addi $s3, $s3, 1
+		addi $s2, $zero, 0
+		
+		slt $s5, $s3, $s0
+		beq $s5, 0, donePrint
+		
+		j printElement
+		
+	
+	donePrint:
+		
+		lw $a1, 8($sp)
+		lw $a0, 4($sp)
+		lw $ra, 0($sp)
+		addi $sp, $sp, 12
+		
+		jr $ra 
+	
+	
+# v0 -> N 
+sizeFromUser:
+	
+	la $a0, line1
+	li $v0, 4
+	syscall
+		
+	li $v0,5 
+	syscall	
+	
+	jr $ra 
+		
+
+# a0 -> represents N, each node has 4 bytes 
+# v0 -> base address of array 
+createMatrix:	
+
+	addi $sp, $sp, -8
+	sw $ra, 0($sp)
+	sw $a0, 4($sp)
+	
+	
+	addi $s0, $a0, 0 # N is held in $s0
+	mul $s1 , $s0, $s0 # N*N
+	mul $s1, $s1, 4 # total of N*N*4 bytes will be allocated 
+	
+	addi $a0, $s1, 0
+	li $v0, 9
+	syscall  
+	
+	lw $a0, 4($sp)
+	lw $ra, 0($sp)
+	addi $sp, $sp, 8
+	
+	jr $ra 
+	
+
+# a0 -> N value to reach each element
+# a1 -> base address of the array 
+fillMatrix:
+
+	addi $sp, $sp, -8
+	sw $ra, 0($sp)
+	sw $a0, 4($sp)
+	
+	addi $s1, $a0, 0
+	mul $s1, $s1, $s1
+	
+	addi $s0, $a1, 0
+	
+	addi $s2, $zero, 0 # track the size 
+
+	
+	
+	fillElement:
+		slt $s3, $s2, $s1
+		beq $s3, $zero, exit
+
+		addi $s2, $s2, 1 # increment 
+		
+		sw $s2, 0($s0)
+		
+		addi $s0, $s0, 4 # next value index-wise
+
+		j fillElement
+	
+	exit:
+		lw $a0, 4($sp)
+		lw $ra, 0($sp)
+		addi $sp, $sp, 8
+		
+		jr $ra 
+	
+
+
+done:
+		
+	la $a0, line3
+	li $v0, 4
+	syscall
+	
+
+
+
+
+
+
+
+

@@ -1,0 +1,605 @@
+`timescale 1ns / 1ps
+module PipeFtoD(input logic enable, clk, reset, clear, input logic[31:0] instr, PcPlus4F,
+output logic[31:0] instrD, PcPlus4D);
+always_ff @(posedge clk, posedge reset)
+begin
+if (clear)
+begin
+PcPlus4D <= 0;
+instrD <= 0;
+end
+else if (reset)
+begin
+PcPlus4D <= 0;
+instrD <= 0;
+end
+else if(enable)
+begin
+instrD <= instr;
+PcPlus4D <= PcPlus4F;
+end
+else
+begin
+instrD <= instrD;
+PcPlus4D <= PcPlus4D;
+end
+end
+endmodule
+module PipeWtoF(input logic[31:0] PC, input logic enable, clk, reset, output logic[31:0] PCF);
+always_ff @(posedge clk, posedge reset)
+begin
+if (reset)
+begin
+PCF <= 0;
+end
+else if(enable)
+begin
+PCF <= PC;
+end
+else
+begin
+PCF <= PCF;
+end
+end
+endmodule
+module PipeDtoE(input logic clr, clk, reset, MemtoRegD, MemWriteD, RegWriteD,
+input logic RegDstD, AluSrcD,
+input logic[2:0] AluControlD,
+input logic[4:0] RsD, RtD, RdD,
+input logic[31:0] RD11, RD21,
+input logic[31:0] sgnimd,
+output logic RegWriteE, MemtoRegE, MemWriteE,
+output logic AluSrcE, RegDstE,
+output logic[2:0] AluControlE,
+output logic[4:0] RsE, RtE, RdE,
+output logic[31:0] RD12, RD22,
+output logic[31:0] sgnime);
+always_ff @(posedge clk, posedge reset)
+begin
+if(clr)
+begin
+RD12<=0;
+RD22<=0;
+RegWriteE<=0;
+MemtoRegE<=0;
+MemWriteE<=0;
+RsE<=0;
+RtE<=0;
+RdE<=0;
+AluControlE<=0;
+AluSrcE<=0;
+RegDstE<=0;
+sgnime<=0;
+end
+else if(reset)
+begin
+AluControlE<=0;
+MemWriteE<=0;
+RdE<=0;
+MemtoRegE<=0;
+RtE<=0;
+RegWriteE<=0;
+RsE<=0;
+AluSrcE<=0;
+RegDstE<=0;
+RD12<=0;
+RD22<=0;
+sgnime<=0;
+end
+else
+begin
+RtE<=RtD;
+RegWriteE<=RegWriteD;
+RD12<=RD11;
+MemtoRegE<=MemtoRegD;
+AluSrcE<=AluSrcD;
+RegDstE<=RegDstD;
+MemWriteE<=MemWriteD;
+AluControlE<=AluControlD;
+RdE<=RtD;
+RD22<=RD21;
+RsE<=RsD;
+sgnime<=sgnimd;
+end
+end
+endmodule
+module PipeEtoM(input logic clk, reset, RegWriteE, MemtoRegE, MemWriteE,
+input logic[4:0] WriteRegE,
+input logic[31:0] ALUOutE,
+input logic [31:0] WriteDataE,
+output logic RegWriteM, MemtoRegM, MemWriteM,
+output logic[4:0] WriteRegM,
+output logic[31:0] ALUOutM,
+output logic [31:0] WriteDataM);
+always_ff @(posedge clk, posedge reset)
+begin
+if (reset)
+begin
+RegWriteM<=0;
+MemtoRegM<=0;
+MemWriteM<=0;
+ALUOutM<=0;
+WriteDataM<=0;
+WriteRegM<=0;
+end
+else
+begin
+RegWriteM<=RegWriteE;
+MemtoRegM<=MemtoRegE;
+MemWriteM<=MemWriteE;
+ALUOutM<=ALUOutE;
+WriteDataM<=WriteDataE;
+WriteRegM<=WriteRegE;
+end
+end
+endmodule
+module PipeMtoW(input logic clk, reset, RegWriteM, MemtoRegM,
+input logic[4:0] WriteRegM,
+input logic[31:0] ReadDataM, ALUOutM,
+output logic RegWriteW, MemtoRegW,
+output logic[4:0] WriteRegW,
+output logic[31:0] ReadDataW, ALUOutW);
+always_ff @(posedge clk, posedge reset)
+begin
+if(reset)
+begin
+RegWriteW<=0;
+MemtoRegW<=0;
+ReadDataW<=0;
+ALUOutW<=0;
+WriteRegW<=0;
+end
+else
+begin
+RegWriteW<=RegWriteM;
+MemtoRegW<=MemtoRegM;
+ReadDataW<=ReadDataM;
+ALUOutW<=ALUOutM;
+WriteRegW<=WriteRegM;
+end
+end
+endmodule
+module datapath (input logic clk, reset,
+input logic [31:0] PCF, instr,
+input logic RegWriteD, MemtoRegD, MemWriteD,
+input logic [2:0] ALUControlD,
+input logic AluSrcD, RegDstD, BranchD, jump,
+output logic[31:0] instrD, ALUOut, ResultW);
+logic [1:0] ForwardAE, ForwardBE;
+logic [31:0] RD21, SignImmD, PCBranchE, RD11, RD12, ALUOutM, PCPlus4E, immsfted,
+PCPlus4D, SignImmE, WriteDataE, SrcAE, RD22, SrcBE, ReadDataM, ReadDataW,
+ALUOutW;
+logic [2:0] AluControlE;
+logic RegWriteE, MemtoRegE, MemWriteE, RegWriteM, MemtoRegM, MemWriteM, SrcE,
+RegDstE, RegWriteW, MemtoRegW;
+logic [4:0] RsD, RdD, RtD, RsE, RtE, RdE, WriteRegE, WriteRegM, WriteRegW;
+logic [31:0] PCm, PCm2;
+logic [31:0] bmux1, bmux2, PCBranchD, PCPlus4F, WriteDataM;;
+logic comparatorOut;
+logic PCSrcD, StallD, StallF, StallDfinal, StallFfinal, ForwardAD, ForwardBD, FlushE;;
+assign StallDfinal = ~StallD;
+assign StallFfinal = ~StallF;
+always_comb begin
+PCSrcD = (BranchD & comparatorOut);
+RsD = instrD[25:21];
+RtD = instrD[20:16];
+RdD = instrD[15:11];
+end
+HazardUnit hazunit(
+RegWriteW,RegWriteM,MemtoRegM,RegWriteE,MemtoRegE,BranchD, WriteRegW,
+WriteRegM,
+RsE,RtE, RsD,RtD, WriteRegE, ForwardAD, ForwardBD,
+FlushE,StallD,StallF, ForwardAE,ForwardBE);
+mux2 #(32) sourceMux(PCPlus4F, PCBranchD, PCSrcD, PCm);
+mux2 #(32) pcmux(PCm, {PCPlus4F[31:28], RsD, RtD, RdD, instrD[10:0], 2'b00}, jump,
+PCm2);
+PipeWtoF pwf(PCm2, StallFfinal, clk, reset, PCF);
+regfile regf(clk, RegWriteW, RsD, RtD, WriteRegW, ResultW, RD11, RD21);
+adder adderPCF(PCF, 32'b00000000000000000000000000000100, PCPlus4F);
+PipeFtoD pfd(StallDfinal, clk, reset, (PCSrcD || jump), instr, PCPlus4F, instrD, PCPlus4D);
+signext sigExtdr(instrD[15:0], SignImmD);
+mux2 #(32) rd1mux(RD11, ALUOutM, ForwardAD, bmux1);
+mux2 #(32) rd2mux(RD21, ALUOutM, ForwardBD, bmux2);
+cmprt cmprt1(bmux1, bmux2, comparatorOut);
+mux2 #(32) esrc(WriteDataE, SignImmE, SrcE, SrcBE);
+sl2 esgnimm(SignImmD, immsfted);
+mux2 #(5) ewreg(RtE, RdE, RegDstE, WriteRegE);
+mux4 #(32) esrcalu(RD12, ResultW, ALUOutM, 0, ForwardAE, SrcAE);
+adder pcbaddr(immsfted, PCPlus4D, PCBranchD);
+mux4 #(32) ewrt(RD22, ResultW, ALUOutM, 0, ForwardBE, WriteDataE);
+alu aluE(SrcAE, SrcBE, AluControlE, ALUOut, reset);
+PipeEtoM etm( clk, reset, RegWriteE, MemtoRegE, MemWriteE, WriteRegE, ALUOut,
+WriteDataE,
+RegWriteM, MemtoRegM, MemWriteM, WriteRegM, ALUOutM, WriteDataM);
+dmem dataMemory(clk, MemWriteM, ALUOutM, WriteDataM, ReadDataM);
+PipeMtoW mtw(clk, reset, RegWriteM, MemtoRegM, WriteRegM, ReadDataM, ALUOutM,
+RegWriteW, MemtoRegW, WriteRegW, ReadDataW, ALUOutW);
+mux2 #(32) wrres( ALUOutW, ReadDataW, MemtoRegW, ResultW);
+module HazardUnit( input logic RegWriteW, RegWriteM, MemtoRegM, RegWriteE,
+MemtoRegE, BranchD, input logic [4:0] WriteRegW, WriteRegM, rsE, rtE, rsD, rtD,
+WriteRegE,
+output logic ForwardAD, ForwardBD, FlushE, StallD, StallF, output logic [1:0]
+ForwardAE, ForwardBE);
+logic lwstall;
+logic branchstall;
+always_comb begin
+lwstall = ((rsD == rtE) | (rtD == rtE)) & MemtoRegE;
+StallF <= ( lwstall | branchstall);
+StallD <= ( lwstall | branchstall);
+FlushE <= ( lwstall | branchstall);
+ForwardAD = (rsD != 0) & (rsD == WriteRegM) & RegWriteM;
+ForwardBD = (rtD != 0) & (rtD == WriteRegM) & RegWriteM;
+branchstall = (BranchD & RegWriteE & ( (WriteRegE == rsD)| (WriteRegE == rtD)) ) | (
+BranchD & MemtoRegM & ( (WriteRegM == rsD)| (WriteRegM == rtD) ) );
+if ( (rsE != 5'b00000) & (rsE == WriteRegW) & RegWriteW )
+begin
+ForwardAE = 2'b01;
+end
+else if ( (rsE != 5'b00000) & (rsE == WriteRegM) & RegWriteM )
+begin
+ForwardAE = 2'b10;
+end
+else
+begin
+ForwardAE = 2'b00;
+end
+if ( (rtE != 5'b00000) & (rtE == WriteRegW) & RegWriteW )
+begin
+ForwardBE = 2'b01;
+end
+else if ( (rtE != 5'b00000) & (rtE == WriteRegM) & RegWriteM )
+begin
+ForwardBE = 2'b10;
+end
+else
+begin
+ForwardBE = 2'b00;
+end
+end
+endmodule
+module imem ( input logic [5:0] addr, output logic [31:0] instr);
+always_comb
+case ({addr,2'b00})
+TODO
+default: instr = {32{1'bx}};
+endcase
+endmodule
+module controller(input logic[5:0] op, funct,
+output logic memtoreg, memwrite,
+output logic alusrc,
+output logic regdst, regwrite,
+output logic[2:0] alucontrol,
+output logic branch,
+output logic jump);
+logic [1:0] aluop;
+maindec md (op, memtoreg, memwrite, branch, alusrc, regdst, regwrite, aluop, jump);
+aludec ad (funct, aluop, alucontrol);
+endmodule
+module dmem (input logic clk, we,
+input logic[31:0] a, wd,
+output logic[31:0] rd);
+logic [31:0] RAM[63:0];
+assign rd = RAM[a[31:2]];
+always_ff @(posedge clk)
+if (we)
+RAM[a[31:2]] <= wd;
+endmodule
+module maindec (input logic[5:0] op,
+output logic memtoreg, memwrite, branch,
+output logic alusrc, regdst, regwrite, jump,
+output logic[1:0] aluop );
+logic [8:0] controls;
+assign {regwrite, regdst, alusrc, branch, memwrite,
+memtoreg, aluop, jump} = controls;
+always_comb
+case(op)
+6'b000000: controls <= 9'b110000100; // R-type
+6'b100011: controls <= 9'b101001000; // LW
+6'b101011: controls <= 9'b001010000; // SW
+6'b000100: controls <= 9'b000100010; // BEQ
+6'b001000: controls <= 9'b101000000; // ADDI
+6'b000010: controls <= 9'b000000001; // J
+default: controls <= 9'bxxxxxxxxx; // illegal op
+endcase
+endmodule
+module aludec (input logic[5:0] funct,
+input logic[1:0] aluop,
+output logic[2:0] alucontrol);
+always_comb
+case(aluop)
+2'b00: alucontrol = 3'b010; // add (for lw/sw/addi)
+2'b01: alucontrol = 3'b110; // sub (for beq)
+default: case(funct) // R-TYPE instructions
+6'b100000: alucontrol = 3'b010; // ADD
+6'b100010: alucontrol = 3'b110; // SUB
+6'b100100: alucontrol = 3'b000; // AND
+6'b100101: alucontrol = 3'b001; // OR
+6'b101010: alucontrol = 3'b111; // SLT
+default: alucontrol = 3'bxxx; // ???
+endcase
+endcase
+endmodule
+module regfile (input logic clk, we3,
+input logic[4:0] ra1, ra2, wa3,
+input logic[31:0] wd3,
+output logic[31:0] rd1, rd2);
+logic [31:0] rf [31:0];
+always_ff @(negedge clk)
+if (we3)
+rf [wa3] <= wd3;
+assign rd1 = (ra1 != 0) ? rf [ra1] : 0;
+assign rd2 = (ra2 != 0) ? rf[ ra2] : 0;
+endmodule
+module alu(input logic [31:0] a, b,
+input logic [2:0] alucont,
+output logic [31:0] result,
+input logic reset);
+always_comb begin
+case(alucont)
+3'b010: result = a + b;
+3'b110: result = a - b;
+3'b000: result = a & b;
+3'b001: result = a | b;
+3'b111: result = (a < b) ? 1 : 0;
+default: result = {32{1'bx}};
+endcase
+if(reset)
+result <= 0;
+end
+endmodule
+module adder (input logic[31:0] a, b,
+output logic[31:0] y);
+assign y = a + b;
+endmodule
+module sl2 (input logic[31:0] a,
+output logic[31:0] y);
+assign y = {a[29:0], 2'b00}; // shifts left by 2
+endmodule
+module signext (input logic[15:0] a,
+output logic[31:0] y);
+assign y = {{16{a[15]}}, a}; // sign-extends 16-bit a
+endmodule
+module flopr #(parameter WIDTH = 8)
+(input logic clk, reset,
+input logic[WIDTH-1:0] d,
+output logic[WIDTH-1:0] q);
+always_ff@(posedge clk, posedge reset)
+if (reset) q <= 0;
+else q <= d;
+endmodule
+module mux2 #(parameter WIDTH = 8)
+(input logic[WIDTH-1:0] d0, d1,
+input logic s,
+output logic[WIDTH-1:0] y);
+assign y = s ? d1 : d0;
+endmodule
+module cmprt(input [31:0] inpt1, inpt2, output equal);
+assign equal = ( inpt1 == inpt2 );
+endmodule
+module top(input logic clk, reset, output logic[31:0] pc, input logic memwrite,
+output logic[31:0] aluout, resultW, instrOut);
+mips pipelinedmips(clk, reset, pc, memwrite, aluout, resultW, instrOut);
+endmodule
+`timescale 1ns / 1ps
+module top_tb();
+initial 
+begin
+clock = 0;
+reset = 1; 
+#40ns; 
+reset = ~reset; // 40 ns => reset!
+end
+always
+begin
+#20; 
+clock = ~clock; // every 20 ns => rising edge
+end 
+endmodule
+`timescale 1ns / 1ps
+
+module disp_unit(input clk, input [31:0] writeData, input [31:0] dataAddress,
+output [6:0] activate_catode, output [3:0] activate_anode);
+
+
+reg [3:0] num = 4'b0000;
+reg [3:0] anode = 4'b0111;
+reg [6:0] catode = 7'b0000001;
+reg [19:0] cnt_1;
+wire [1:0] cnt_2;
+
+
+
+always @(posedge clk)
+    begin
+        cnt_1 <= cnt_1 + 1;
+    end
+ 
+ // anode
+ always @(*)
+  begin
+    case(cnt_2)
+        2'b00:
+        begin
+            anode = 4'b0111;
+            num = writeData[7:4];
+        end
+        2'b01:
+        begin
+            anode = 4'b1011;
+            num = writeData[3:0];;
+        end
+        2'b10:
+        begin
+            anode = 4'b1101;
+            num = dataAddress[7:4];
+        end
+        2'b11:
+        begin
+            anode = 4'b1110;
+            num = dataAddress[3:0];
+        end
+    endcase
+  end
+  
+  
+ always @(*)
+    begin
+        case(num)
+        4'b0000:
+            begin
+                catode = 7'b0000001;
+            end
+        4'b0001:
+            begin
+                catode = 7'b1001111;
+            end
+        4'b0010:
+            begin
+                catode = 7'b0010010;
+            end
+        4'b0011:
+            begin
+                catode = 7'b0000110;
+            end
+        4'b0100:
+            begin
+                catode = 7'b1001100;
+            end
+        4'b0101:
+            begin
+                catode = 7'b0100100;
+            end
+        4'b0110:
+            begin
+                catode = 7'b0100000;
+            end
+        4'b0111:
+            begin
+                catode = 7'b0001111;
+            end
+        4'b1000:
+            begin
+                catode = 7'b0000000;
+            end
+        4'b1001:
+            begin
+                catode = 7'b0000100;
+            end
+        4'b1010:
+            begin
+                catode = 7'b0000010;
+            end
+        4'b1011:
+            begin
+                catode = 7'b1100000;
+            end
+        4'b1100:
+            begin
+                catode = 7'b0110001;
+            end
+        4'b1101:
+            begin
+                catode = 7'b1000010;
+            end
+        4'b1110:
+            begin
+                catode = 7'b0110000;
+            end
+        4'b1111:
+            begin
+                catode = 7'b0111000;
+            end
+        endcase
+    end 
+    
+       assign cnt_2 = cnt_1[19:18];
+       assign activate_anode = anode;
+       assign activate_catode = catode;
+
+endmodule
+module pulse_controller(
+	input CLK, sw_input, clear,
+	output reg clk_pulse );
+
+	 reg [2:0] state, nextstate;
+	 reg [27:0] CNT; 
+	 wire cnt_zero; 
+
+	always @ (posedge CLK, posedge clear)
+	   if(clear)
+	    	state <=3'b000;
+	   else
+	    	state <= nextstate;
+
+	always @ (sw_input, state, cnt_zero)
+          case (state)
+             3'b000: begin if (sw_input) nextstate = 3'b001; 
+                           else nextstate = 3'b000; clk_pulse = 0; end	     
+             3'b001: begin nextstate = 3'b010; clk_pulse = 1; end
+             3'b010: begin if (cnt_zero) nextstate = 3'b011; 
+                           else nextstate = 3'b010; clk_pulse = 1; end
+             3'b011: begin if (sw_input) nextstate = 3'b011; 
+                           else nextstate = 3'b100; clk_pulse = 0; end
+             3'b100: begin if (cnt_zero) nextstate = 3'b000; 
+                           else nextstate = 3'b100; clk_pulse = 0; end
+            default: begin nextstate = 3'b000; clk_pulse = 0; end
+          endcase
+
+	always @(posedge CLK)
+	   case(state)
+		3'b001: CNT <= 100000000;
+		3'b010: CNT <= CNT-1;
+		3'b011: CNT <= 100000000;
+		3'b100: CNT <= CNT-1;
+	   endcase
+	
+	assign cnt_zero = ~|CNT;
+
+endmodule
+`timescale 1ns / 1ps
+
+
+module lab_4(input clk, input clk_input, input reset_input, input clear, output [6:0] activate_catode, output [3:0] activate_anode);
+
+wire clk_pulse, reset_pulse, memwrite;
+wire[31:0] instr, pc, result, aluout;
+
+top topModule(clk_pulse, reset_pulse, pc, memwrite, aluout, result, instr);
+
+disp_unit disp_unit1(clk, result, instr, activate_catode, activate_anode);
+
+pulse_controller clock_pulse_button(clk, clk_input, clear, clk_pulse);
+
+pulse_controller reset_pulse_button(clk, reset_input, clear, reset_pulse);
+
+endmodule
+set_property PACKAGE_PIN W19 [get_ports clear]
+set_property IOSTANDARD LVCMOS33 [get_ports clear]
+set_property IOSTANDARD LVCMOS33 [get_ports clk]
+set_property PACKAGE_PIN W5 [get_ports clk]
+set_property PACKAGE_PIN U18 [get_ports clk_input]
+set_property PACKAGE_PIN T17 [get_ports reset_input]
+set_property IOSTANDARD LVCMOS33 [get_ports clk_input]
+set_property IOSTANDARD LVCMOS33 [get_ports reset_input]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_anode[3]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_anode[2]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_anode[1]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_anode[0]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[6]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[5]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[4]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[3]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[2]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[1]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {activate_catode[0]}]
+set_property PACKAGE_PIN W4 [get_ports {activate_anode[3]}]
+set_property PACKAGE_PIN V4 [get_ports {activate_anode[2]}]
+set_property PACKAGE_PIN U4 [get_ports {activate_anode[1]}]
+set_property PACKAGE_PIN U2 [get_ports {activate_anode[0]}]
+set_property PACKAGE_PIN W7 [get_ports {activate_catode[6]}]
+set_property PACKAGE_PIN W6 [get_ports {activate_catode[5]}]
+set_property PACKAGE_PIN U8 [get_ports {activate_catode[4]}]
+set_property PACKAGE_PIN V8 [get_ports {activate_catode[3]}]
+set_property PACKAGE_PIN U5 [get_ports {activate_catode[2]}]
+set_property PACKAGE_PIN V5 [get_ports {activate_catode[1]}]
+set_property PACKAGE_PIN U7 [get_ports {activate_catode[0]}]

@@ -1,0 +1,143 @@
+﻿CS224 / 
+Lab No: 07
+Sec No: 04
+Your Name: Anıl Kılıç 
+Your ID:22203783
+Sec No: 06
+Your Name: Arda Güler 
+Your ID:22202022
+Date: 5/6/20204
+
+void Wait() {
+ int exit = 0;
+ for (int i =0;i<1000&&(exit==0);i++) // while waiting for 1 seconds check if the two buttons are high at the same time
+ {
+    Delay_ms(1);
+    if(portE==0x03)
+    {
+       
+        exit =1; // if they are both high exit
+    }
+ }
+}
+
+
+void main() {
+
+
+ AD1PCFG = 0xFFFF;
+
+
+ DDPCON.JTAGEN = 0;
+
+
+ TRISA = 0x0000;  // Port a is output
+ TRISE = 0XFFFF;  //Port e is input
+
+
+ while(1)
+ {
+  if(portE.B0==1 )// If button 0 is high enter this branch
+  {
+    Wait();
+    portA=0x3b; // Drive dc motor clockwise
+    Wait();     // Wait for 1 second while checking whether the 2 buttons are high at the same time or not
+    portA=0xFF; // Stop the dc motor
+  }
+  else if ( portE.B1==1) // If button 1 is high enter this branch
+  {
+    Wait();
+    portA=0x3d; //Drive dc motor counter-clockwise
+    Wait();     // Wait for 1 second while checking whether the 2 buttons are high at the same time or not
+    portA=0xFF; // Stop the dc motor
+
+  }
+  else {
+    portA=0xFF;  Wait();
+  }
+
+SFRS for part 2-C
+TRISA: OUTPUT
+TRISE: INPUT
+Code for part 2-C
+
+
+
+
+
+
+
+
+// Hexadecimal values for digits in 7 segment
+unsigned char binary_pattern[]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F};
+
+         int currentFib =1; // Keeping track of the current fibonacci n
+int Fibonacci(int curFib) {
+    int a = 0;
+    int b = 1;
+    int next =0;
+
+
+    // Finding the next Fibonacci number
+    while (1) {
+        next = a + b;
+        if (next > curFib)
+            return next;
+        a = b;
+        b = next;
+    }
+}
+
+
+void main() {
+
+
+ AD1PCFG = 0xFFFF;      // Configure AN pins as digital I/O
+ JTAGEN_bit = 0;        // Disable JTAG
+
+ TRISA = 0x00;  //portA is output to D
+ TRISE = 0X00;  //portE is output to AN
+
+ while(1)
+ {
+    int modIndex =1;
+                       int k;
+     for(k =0;k<(currentFib*100)/4;k++) //For loop for displaying the four necessary digits the necessary duration which is calculated by 100*(fibonacci number being displayed)
+        {
+        int temp =currentFib;
+        modIndex= temp%10;  //get the first digit
+        PORTA=binary_pattern[modIndex]; //get the number
+        PORTE=0x08; //open digit 1     
+        Delay_ms(1);
+        temp = temp/10; // divide the currentfib by 10 for the next digit
+
+
+        // same as above for second digit
+         modIndex= temp%10;
+        PORTA=binary_pattern[modIndex];
+        PORTE=0x04;
+        Delay_ms(1);
+        temp = temp/10;
+
+        // same as above for third digit
+        modIndex= temp%10;
+        PORTA=binary_pattern[modIndex];
+        PORTE=0x02;
+        Delay_ms(1);
+        temp = temp/10;
+
+
+        // same as above for the last digit
+        modIndex= temp%10;
+        PORTA=binary_pattern[modIndex];
+        PORTE=0x01;
+        Delay_ms(1);
+        temp = temp/10;
+        }
+
+
+    currentFib=Fibonacci(currentFib); // calculate next fibonacci
+ }
+
+
+}
